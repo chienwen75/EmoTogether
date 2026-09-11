@@ -15,7 +15,10 @@
   >
 
   <title>Someone, Somewhere</title>
-
+  <script
+    type="module"
+    src="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision/vision_bundle.mjs">
+  </script>
   <style>
 
     * {
@@ -188,6 +191,48 @@
 
     }
 
+    #cameraButton {
+  
+    margin-top: 28px;
+  
+  }
+  
+  
+  #cameraBox {
+  
+    margin-top: 20px;
+  
+    width: min(320px, 80vw);
+  
+    position: relative;
+  
+  }
+  
+  
+  #webcam {
+  
+    width: 100%;
+  
+    border-radius: 20px;
+  
+    display: none;
+  
+    transform: scaleX(-1);
+  
+    opacity: 0.75;
+  
+  }
+  
+  
+  #cameraStatus {
+  
+    margin-top: 10px;
+  
+    font-size: 13px;
+  
+    opacity: 0.6;
+  
+  }  
   </style>
 
 </head>
@@ -217,7 +262,33 @@ SOMEONE, SOMEWHERE
     into feelings once carried by other people.
 
   </div>
+  
+  <button id="cameraButton">
 
+    Start camera
+
+  </button>
+
+  <div id="cameraBox">
+
+    <video
+
+      id="webcam"
+
+      autoplay
+
+      playsinline
+
+      muted>
+
+    </video>
+
+    <div id="cameraStatus">
+
+      Camera is off
+
+    </div>
+  </div>
 </div>
 
 <div id="controls">
@@ -625,7 +696,458 @@ function draw() {
 }
 
 draw();
+  // ==========================
+// CAMERA + MEDIAPIPE
+// ==========================
 
+const video =
+  document.getElementById("webcam");
+
+const cameraButton =
+  document.getElementById("cameraButton");
+
+const cameraStatus =
+  document.getElementById("cameraStatus");
+
+
+let faceLandmarker = null;
+
+let cameraRunning = false;
+
+let lastVideoTime = -1;
+
+let currentDetectedEmotion = "neutral";
+
+
+// --------------------------
+// 1. START CAMERA
+// --------------------------
+
+cameraButton.addEventListener(
+  "click",
+  startCamera
+);
+
+
+async function startCamera() {
+
+  try {
+
+    cameraStatus.textContent =
+      "Requesting camera permission...";
+
+
+    const stream =
+      await navigator.mediaDevices.getUserMedia({
+
+        video: {
+          facingMode: "user"
+        },
+
+        audio: false
+
+      });
+
+
+    video.srcObject =
+      stream;
+
+
+    await video.play();
+
+
+    video.style.display =
+      "block";
+
+
+    cameraStatus.textContent =
+      "Loading face model...";
+
+
+    await createFaceLandmarker();
+
+
+    cameraRunning =
+      true;
+
+
+    cameraStatus.textContent =
+      "Looking for your expression...";
+
+
+    detectFace();
+
+  }
+
+  catch (error) {
+
+    console.error(error);
+
+
+    cameraStatus.textContent =
+      "Camera could not be started.";
+
+  }
+
+}
+
+
+
+// --------------------------
+// 2. CREATE MEDIAPIPE MODEL
+// --------------------------
+
+async function createFaceLandmarker() {
+
+  const {
+    FaceLandmarker,
+    FilesetResolver
+  } =
+    await import(
+      "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/+esm"
+    );
+
+
+  const vision =
+    await FilesetResolver.forVisionTasks(
+
+      "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm"
+
+    );
+
+
+  faceLandmarker =
+    await FaceLandmarker.createFromOptions(
+
+      vision,
+
+      {
+
+        baseOptions: {
+
+          modelAssetPath:
+
+            "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task"
+
+        },
+
+
+        runningMode:
+          "VIDEO",
+
+
+        numFaces:
+          1,
+
+
+        outputFaceBlendshapes:
+          true,
+
+
+        minFaceDetectionConfidence:
+          0.5,
+
+
+        minFacePresenceConfidence:
+          0.5,
+
+
+        minTrackingConfidence:
+          0.5
+
+      }
+
+    );
+
+}
+
+
+
+// --------------------------
+// 3. READ VIDEO FRAME
+// --------------------------
+
+function detectFace() {
+
+  if (
+    !cameraRunning ||
+    !faceLandmarker
+  ) {
+
+    return;
+
+  }
+
+
+  if (
+    video.readyState >= 2 &&
+    video.currentTime !== lastVideoTime
+  ) {
+
+
+    const now =
+      performance.now();
+
+
+    const result =
+      faceLandmarker.detectForVideo(
+        video,
+        now
+      );
+
+
+    lastVideoTime =
+      video.currentTime;
+
+
+    analyseExpression(
+      result
+    );
+
+  }
+
+
+  requestAnimationFrame(
+    detectFace
+  );
+
+}
+
+
+
+// --------------------------
+// 4. READ BLENDSHAPES
+// --------------------------
+
+function analyseExpression(result) {
+
+
+  if (
+    !result.faceBlendshapes ||
+    result.faceBlendshapes.length === 0
+  ) {
+
+    cameraStatus.textContent =
+      "No face detected";
+
+    return;
+
+  }
+
+
+  const categories =
+    result
+      .faceBlendshapes[0]
+      .categories;
+
+
+  const scores = {};
+
+
+  for (
+    const item of categories
+  ) {
+
+    scores[
+      item.categoryName
+    ] =
+      item.score;
+
+  }
+
+
+  const emotion =
+    calculateEmotion(
+      scores
+    );
+
+
+  cameraStatus.textContent =
+    "Detected: " +
+    emotion;
+
+
+  if (
+    emotion !==
+    currentDetectedEmotion
+  ) {
+
+    currentDetectedEmotion =
+      emotion;
+
+
+    setEmotion(
+      emotion
+    );
+
+  }
+
+}
+
+
+
+// --------------------------
+// 5. CALCULATE EMOTION
+// --------------------------
+
+function calculateEmotion(s) {
+
+
+  const smile =
+
+    (
+      (s.mouthSmileLeft || 0) +
+      (s.mouthSmileRight || 0)
+
+    ) / 2;
+
+
+
+  const cheekSquint =
+
+    (
+      (s.cheekSquintLeft || 0) +
+      (s.cheekSquintRight || 0)
+
+    ) / 2;
+
+
+
+  const frown =
+
+    (
+      (s.mouthFrownLeft || 0) +
+      (s.mouthFrownRight || 0)
+
+    ) / 2;
+
+
+
+  const browDown =
+
+    (
+      (s.browDownLeft || 0) +
+      (s.browDownRight || 0)
+
+    ) / 2;
+
+
+
+  const mouthPress =
+
+    (
+      (s.mouthPressLeft || 0) +
+      (s.mouthPressRight || 0)
+
+    ) / 2;
+
+
+
+  const browInnerUp =
+    s.browInnerUp || 0;
+
+
+
+  const noseSneer =
+
+    (
+      (s.noseSneerLeft || 0) +
+      (s.noseSneerRight || 0)
+
+    ) / 2;
+
+
+
+  // ------------------
+  // EMOTION SCORES
+  // ------------------
+
+
+  const joy =
+
+    smile * 0.75 +
+
+    cheekSquint * 0.25;
+
+
+
+  const sadness =
+
+    frown * 0.6 +
+
+    browInnerUp * 0.4;
+
+
+
+  const anger =
+
+    browDown * 0.55 +
+
+    mouthPress * 0.30 +
+
+    noseSneer * 0.15;
+
+
+
+  const emotionScores = {
+
+    joy,
+    sadness,
+    anger
+
+  };
+
+
+  let bestEmotion =
+    "neutral";
+
+
+  let bestScore =
+    0;
+
+
+  for (
+    const [
+      emotion,
+      score
+    ]
+    of Object.entries(
+      emotionScores
+    )
+  ) {
+
+    if (
+      score >
+      bestScore
+    ) {
+
+      bestEmotion =
+        emotion;
+
+      bestScore =
+        score;
+
+    }
+
+  }
+
+
+
+  // Only react if signal
+  // is strong enough
+
+  if (
+    bestScore < 0.25
+  ) {
+
+    return "neutral";
+
+  }
+
+
+  return bestEmotion;
+
+}
 </script>
 
 </body>
