@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+
+<html lang="en">
+
+<head>
+
+  <meta charset="UTF-8">
+
+  <meta
+
+    name="viewport"
+
+    content="width=device-width, initial-scale=1.0"
+
+  >
+
+  <title>Someone, Somewhere</title>
+
+  <style>
+
+    * {
+
+      box-sizing: border-box;
+
+    }
+
+    body {
+
+      margin: 0;
+
+      overflow: hidden;
+
+      background: #111;
+
+      color: white;
+
+      font-family:
+
+        Arial,
+
+        Helvetica,
+
+        sans-serif;
+
+    }
+
+    canvas {
+
+      position: fixed;
+
+      top: 0;
+
+      left: 0;
+
+      width: 100%;
+
+      height: 100%;
+
+      z-index: 0;
+
+    }
+
+    #interface {
+
+      position: fixed;
+
+      top: 0;
+
+      left: 0;
+
+      width: 100%;
+
+      height: 100%;
+
+      display: flex;
+
+      flex-direction: column;
+
+      justify-content: center;
+
+      align-items: center;
+
+      text-align: center;
+
+      z-index: 10;
+
+      padding: 30px;
+
+    }
+
+    h1 {
+
+      font-size: clamp(
+
+        36px,
+
+        8vw,
+
+        80px
+
+      );
+
+      margin-bottom: 20px;
+
+      font-weight: 400;
+
+    }
+
+    #message {
+
+      max-width: 600px;
+
+      font-size: 18px;
+
+      line-height: 1.5;
+
+      opacity: 0.8;
+
+    }
+
+    #controls {
+
+      position: fixed;
+
+      bottom: 30px;
+
+      left: 50%;
+
+      transform: translateX(-50%);
+
+      display: flex;
+
+      gap: 10px;
+
+      z-index: 20;
+
+    }
+
+    button {
+
+      border: 1px solid white;
+
+      background:
+
+        rgba(0,0,0,0.25);
+
+      color: white;
+
+      padding:
+
+        12px 18px;
+
+      border-radius: 100px;
+
+      font-size: 15px;
+
+      cursor: pointer;
+
+      backdrop-filter:
+
+        blur(10px);
+
+    }
+
+    button:hover {
+
+      background: white;
+
+      color: black;
+
+    }
+
+    #label {
+
+      position: fixed;
+
+      top: 25px;
+
+      left: 25px;
+
+      font-size: 12px;
+
+      letter-spacing: 2px;
+
+      opacity: 0.5;
+
+      z-index: 20;
+
+    }
+
+  </style>
+
+</head>
+
+<body>
+
+<div id="label">
+
+SOMEONE, SOMEWHERE
+
+</div>
+
+<canvas id="canvas"></canvas>
+
+<div id="interface">
+
+  <h1 id="title">
+
+    How are you feeling?
+
+  </h1>
+
+  <div id="message">
+
+    Let your expression become a doorway
+
+    into feelings once carried by other people.
+
+  </div>
+
+</div>
+
+<div id="controls">
+
+  <button onclick="setEmotion('joy')">
+
+    Joy
+
+  </button>
+
+  <button onclick="setEmotion('anger')">
+
+    Anger
+
+  </button>
+
+  <button onclick="setEmotion('sadness')">
+
+    Sadness
+
+  </button>
+
+</div>
+
+<script>
+
+const canvas =
+
+  document.getElementById(
+
+    "canvas"
+
+  );
+
+const ctx =
+
+  canvas.getContext(
+
+    "2d"
+
+  );
+
+let width;
+
+let height;
+
+let time = 0;
+
+let emotion =
+
+  "neutral";
+
+const emotions = {
+
+  neutral: {
+
+    color:
+
+      [180,180,180],
+
+    speed:
+
+      0.4,
+
+    amplitude:
+
+      30,
+
+    frequency:
+
+      0.008,
+
+    lines:
+
+      7,
+
+    title:
+
+      "How are you feeling?",
+
+    message:
+
+      "Let your expression become a doorway into feelings once carried by other people."
+
+  },
+
+  joy: {
+
+    color:
+
+      [245,200,60],
+
+    speed:
+
+      1.4,
+
+    amplitude:
+
+      45,
+
+    frequency:
+
+      0.018,
+
+    lines:
+
+      11,
+
+    title:
+
+      "I sense a trace of joy.",
+
+    message:
+
+      "Let it expand beyond you."
+
+  },
+
+  anger: {
+
+    color:
+
+      [220,55,45],
+
+    speed:
+
+      2.4,
+
+    amplitude:
+
+      75,
+
+    frequency:
+
+      0.026,
+
+    lines:
+
+      16,
+
+    title:
+
+      "I sense a trace of anger.",
+
+    message:
+
+      "You do not have to make it smaller."
+
+  },
+
+  sadness: {
+
+    color:
+
+      [65,150,110],
+
+    speed:
+
+      0.55,
+
+    amplitude:
+
+      25,
+
+    frequency:
+
+      0.006,
+
+    lines:
+
+      8,
+
+    title:
+
+      "I sense a trace of sadness.",
+
+    message:
+
+      "Someone, somewhere, has felt something like this too."
+
+  }
+
+};
+
+function resize() {
+
+  width =
+
+    window.innerWidth;
+
+  height =
+
+    window.innerHeight;
+
+  canvas.width =
+
+    width;
+
+  canvas.height =
+
+    height;
+
+}
+
+window.addEventListener(
+
+  "resize",
+
+  resize
+
+);
+
+resize();
+
+function setEmotion(name) {
+
+  emotion = name;
+
+  const e =
+
+    emotions[name];
+
+  document.getElementById(
+
+    "title"
+
+  ).textContent =
+
+    e.title;
+
+  document.getElementById(
+
+    "message"
+
+  ).textContent =
+
+    e.message;
+
+}
+
+function draw() {
+
+  const e =
+
+    emotions[emotion];
+
+  ctx.fillStyle =
+
+    "rgba(15,15,15,0.16)";
+
+  ctx.fillRect(
+
+    0,
+
+    0,
+
+    width,
+
+    height
+
+  );
+
+  const [
+
+    r,
+
+    g,
+
+    b
+
+  ] =
+
+    e.color;
+
+  for (
+
+    let line = 0;
+
+    line < e.lines;
+
+    line++
+
+  ) {
+
+    ctx.beginPath();
+
+    const baseY =
+
+      height / 2 +
+
+      (
+
+        line -
+
+        e.lines / 2
+
+      ) *
+
+      18;
+
+    for (
+
+      let x = 0;
+
+      x <= width;
+
+      x += 6
+
+    ) {
+
+      let y =
+
+        baseY +
+
+        Math.sin(
+
+          x *
+
+          e.frequency +
+
+          time *
+
+          e.speed +
+
+          line *
+
+          0.45
+
+        )
+
+        *
+
+        e.amplitude;
+
+      if (
+
+        emotion ===
+
+        "anger"
+
+      ) {
+
+        y +=
+
+          Math.sin(
+
+            x *
+
+            0.09 +
+
+            time *
+
+            5
+
+          )
+
+          *
+
+          12;
+
+      }
+
+      ctx.lineTo(
+
+        x,
+
+        y
+
+      );
+
+    }
+
+    ctx.strokeStyle =
+
+      `rgba(
+
+        ${r},
+
+        ${g},
+
+        ${b},
+
+        ${0.15 + line * 0.025}
+
+      )`;
+
+    ctx.lineWidth =
+
+      2;
+
+    ctx.stroke();
+
+  }
+
+  time +=
+
+    0.015;
+
+  requestAnimationFrame(
+
+    draw
+
+  );
+
+}
+
+draw();
+
+</script>
+
+</body>
+
+</html>
