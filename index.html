@@ -15,10 +15,7 @@
   >
 
   <title>Someone, Somewhere</title>
-  <script
-    type="module"
-    src="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision/vision_bundle.mjs">
-  </script>
+ 
   <style>
 
     * {
@@ -312,7 +309,12 @@ SOMEONE, SOMEWHERE
   </button>
 
 </div>
-
+  
+<!-- EmoTogether emotion music -->
+<audio id="joyMusic" src="assets/joy.mp3" loop preload="auto"></audio>
+<audio id="angerMusic" src="assets/anger.mp3" loop preload="auto"></audio>
+<audio id="sadnessMusic" src="assets/sadness.mp3" loop preload="auto"></audio>
+  
 <script>
 
 const canvas =
@@ -526,7 +528,9 @@ function setEmotion(name) {
   ).textContent =
 
     e.message;
-
+ 
+  // NEW: Change the music too.
+  playEmotionMusic(name);
 }
 
 function draw() {
@@ -1150,6 +1154,64 @@ function calculateEmotion(s) {
 }
 </script>
 
-</body>
+<script>
 
+/* =========================
+   EMOTION MUSIC PLAYER
+========================= */
+
+const emotionMusic = {
+  joy: document.getElementById("joyMusic"),
+  anger: document.getElementById("angerMusic"),
+  sadness: document.getElementById("sadnessMusic")
+};
+
+let currentMusicEmotion = null;
+let musicRequestId = 0;
+
+function playEmotionMusic(emotionName) {
+
+  const selectedMusic = emotionMusic[emotionName];
+
+  // Keep playing if the correct track is already playing.
+  if (
+    emotionName === currentMusicEmotion &&
+    selectedMusic &&
+    !selectedMusic.paused
+  ) {
+    return;
+  }
+
+  // Invalidate previous playback requests.
+  const requestId = ++musicRequestId;
+
+  // Stop all tracks.
+  Object.values(emotionMusic).forEach(music => {
+    music.pause();
+    music.currentTime = 0;
+  });
+
+  currentMusicEmotion = null;
+
+  // Neutral means silence.
+  if (!selectedMusic) {
+    return;
+  }
+
+  selectedMusic.play()
+    .then(() => {
+      if (requestId === musicRequestId) {
+        currentMusicEmotion = emotionName;
+      } else {
+        selectedMusic.pause();
+      }
+    })
+    .catch(error => {
+      console.log("Music playback failed:", error);
+    });
+}
+
+</script>  
+
+</body>
 </html>
