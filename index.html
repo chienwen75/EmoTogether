@@ -229,7 +229,79 @@
   
     opacity: 0.6;
   
-  }  
+  } 
+    
+/* Debug panel container */
+#debugPanel {
+  position: fixed;
+  right: 12px;
+  bottom: 12px;
+  width: min(340px, calc(100vw - 24px));
+  max-height: 48vh;
+  overflow: auto;
+
+  background: rgba(12, 18, 24, 0.94);
+  color: #fff;
+  border: 1px solid #555;
+  border-radius: 12px;
+  padding: 12px;
+
+  z-index: 40;
+  font: 12px/1.45 monospace;
+  text-align: left;
+}
+
+/* Hide panel when closed */
+#debugPanel[hidden] {
+  display: none;
+}
+
+/* Individual metric */
+#debugPanel .metric {
+  margin: 5px 0;
+}
+
+/* Metric progress bar */
+#debugPanel .track {
+  height: 5px;
+  background: #444;
+  border-radius: 5px;
+  overflow: hidden;
+}
+
+/* Filled part of progress bar */
+#debugPanel .fill {
+  height: 100%;
+  background: #79cbb0;
+}
+
+/* Panel header */
+#debugPanel .head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* Close button */
+#debugPanel button {
+  padding: 4px 10px;
+  font-size: 12px;
+}
+
+/* Debug toggle button */
+#debugToggle {
+  position: fixed;
+  right: 12px;
+  top: 15px;
+  z-index: 45;
+}
+
+/* Debug information text */
+#debugText {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
   </style>
 
 </head>
@@ -239,6 +311,32 @@
 <div id="label">
 
 SOMEONE, SOMEWHERE
+
+</div>
+
+<!-- Debug toggle button -->
+<button id="debugToggle" type="button">
+  Debug
+</button>
+
+<!-- Debug panel -->
+<div id="debugPanel" hidden>
+
+  <div class="head">
+    <strong>Expression diagnostics</strong>
+
+    <button id="debugClose" type="button">
+      Close
+    </button>
+  </div>
+
+  <!-- Current emotion status -->
+  <div id="debugText">
+    Waiting for camera...
+  </div>
+
+  <!-- Facial expression metrics -->
+  <div id="debugMetrics"></div>
 
 </div>
 
