@@ -1307,13 +1307,15 @@ Sadness requires mouthFrown >= 0.015.`;
 // --------------------------
 
 /* Temporary bridge — replace in Step 5 */
+
+/* V4 — Emotion detection details */
 function calculateEmotionDetails(s) {
 
-  const detectedEmotion = calculateEmotion(s);
-
+  // 1. Average left and right facial signals
   const avg = (left, right) =>
     ((s[left] || 0) + (s[right] || 0)) / 2;
 
+  // 2. Read facial features
   const smile = avg(
     "mouthSmileLeft", "mouthSmileRight"
   );
@@ -1326,53 +1328,99 @@ function calculateEmotionDetails(s) {
     "mouthFrownLeft", "mouthFrownRight"
   );
 
+  const browInnerUp = s.browInnerUp || 0;
+
   const browDown = avg(
     "browDownLeft", "browDownRight"
+  );
+
+  const eyeSquint = avg(
+    "eyeSquintLeft", "eyeSquintRight"
   );
 
   const mouthPress = avg(
     "mouthPressLeft", "mouthPressRight"
   );
 
-  const noseSneer = avg(
-    "noseSneerLeft", "noseSneerRight"
-  );
-
-  const browInnerUp = s.browInnerUp || 0;
-
-  const eyeSquint = avg(
-    "eyeSquintLeft", "eyeSquintRight"
-  );
-
+  // 3. Enhance low frown signals
   const adjustedFrown =
     Math.sqrt(Math.max(0, mouthFrown));
 
-  // Old formulas, only for Step 4 testing
-  const joy = smile * 0.75 + cheekSquint * 0.25;
-  const sadness = mouthFrown * 0.6 + browInnerUp * 0.4;
-  const anger =
-    browDown * 0.55 +
-    mouthPress * 0.30 +
-    noseSneer * 0.15;
+  // 4. Calculate composite emotion scores
+  const joy =
+    smile * 0.80 +
+    cheekSquint * 0.20;
 
+  const sadness =
+    adjustedFrown * 0.90 +
+    browInnerUp * 0.10;
+
+  const anger =
+    browDown * 0.65 +
+    eyeSquint * 0.25 +
+    mouthPress * 0.10;
+
+  // 5. Different thresholds for each emotion
   const thresholds = {
     joy: 0.25,
-    sadness: 0.25,
-    anger: 0.25
+    sadness: 0.16,
+    anger: 0.17
   };
 
+  // 6. Required conditions (gates)
   const gates = {
-    joy: detectedEmotion === "joy",
-    sadness: detectedEmotion === "sadness",
-    anger: detectedEmotion === "anger"
+    joy:
+      joy >= thresholds.joy,
+
+    sadness:
+      sadness >= thresholds.sadness &&
+      mouthFrown >= 0.015 &&
+      smile < 0.30,
+
+    anger:
+      anger >= thresholds.anger &&
+      browDown >= 0.07 &&
+      eyeSquint >= 0.15 &&
+      smile < 0.30
   };
 
+  // 7. Compare scores relative to thresholds
+  const candidates = {
+    joy: gates.joy
+      ? joy / thresholds.joy
+      : 0,
+
+    sadness: gates.sadness
+      ? sadness / thresholds.sadness
+      : 0,
+
+    anger: gates.anger
+      ? anger / thresholds.anger
+      : 0
+  };
+
+  // 8. Select strongest eligible emotion
+  let emotion = "neutral";
+  let best = 1;
+
+  for (
+    const [name, score] of
+    Object.entries(candidates)
+  ) {
+    if (score > best) {
+      best = score;
+      emotion = name;
+    }
+  }
+
+  // 9. Return all data for Debug panel
   return {
-    emotion: detectedEmotion,
+    emotion,
     joy,
     sadness,
     anger,
     thresholds,
+    candidates,
     gates,
     features: {
       smile,
@@ -1387,165 +1435,6 @@ function calculateEmotionDetails(s) {
   };
 }
 
-  
-function calculateEmotion(s) {
-
-
-  const smile =
-
-    (
-      (s.mouthSmileLeft || 0) +
-      (s.mouthSmileRight || 0)
-
-    ) / 2;
-
-
-
-  const cheekSquint =
-
-    (
-      (s.cheekSquintLeft || 0) +
-      (s.cheekSquintRight || 0)
-
-    ) / 2;
-
-
-
-  const frown =
-
-    (
-      (s.mouthFrownLeft || 0) +
-      (s.mouthFrownRight || 0)
-
-    ) / 2;
-
-
-
-  const browDown =
-
-    (
-      (s.browDownLeft || 0) +
-      (s.browDownRight || 0)
-
-    ) / 2;
-
-
-
-  const mouthPress =
-
-    (
-      (s.mouthPressLeft || 0) +
-      (s.mouthPressRight || 0)
-
-    ) / 2;
-
-
-
-  const browInnerUp =
-    s.browInnerUp || 0;
-
-
-
-  const noseSneer =
-
-    (
-      (s.noseSneerLeft || 0) +
-      (s.noseSneerRight || 0)
-
-    ) / 2;
-
-
-
-  // ------------------
-  // EMOTION SCORES
-  // ------------------
-
-
-  const joy =
-
-    smile * 0.75 +
-
-    cheekSquint * 0.25;
-
-
-
-  const sadness =
-
-    frown * 0.6 +
-
-    browInnerUp * 0.4;
-
-
-
-  const anger =
-
-    browDown * 0.55 +
-
-    mouthPress * 0.30 +
-
-    noseSneer * 0.15;
-
-
-
-  const emotionScores = {
-
-    joy,
-    sadness,
-    anger
-
-  };
-
-
-  let bestEmotion =
-    "neutral";
-
-
-  let bestScore =
-    0;
-
-
-  for (
-    const [
-      emotion,
-      score
-    ]
-    of Object.entries(
-      emotionScores
-    )
-  ) {
-
-    if (
-      score >
-      bestScore
-    ) {
-
-      bestEmotion =
-        emotion;
-
-      bestScore =
-        score;
-
-    }
-
-  }
-
-
-
-  // Only react if signal
-  // is strong enough
-
-  if (
-    bestScore < 0.25
-  ) {
-
-    return "neutral";
-
-  }
-
-
-  return bestEmotion;
-
-}
 </script>
 
 <script>
