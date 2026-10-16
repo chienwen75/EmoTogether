@@ -833,64 +833,109 @@ cameraButton.addEventListener(
 
 async function startCamera() {
 
+  // Prevent multiple simultaneous starts.
+  if (cameraRunning || cameraButton.disabled) {
+    return;
+  }
+
+  cameraButton.disabled = true;
+  cameraStatus.textContent =
+    "Requesting camera permission...";
+
+  let stream = null;
+
+  // STEP A: Open the camera
   try {
 
-    cameraStatus.textContent =
-      "Requesting camera permission...";
+    if (!navigator.mediaDevices?.getUserMedia) {
+      throw new Error(
+        "Camera API unavailable. Please use HTTPS or localhost."
+      );
+    }
 
-
-    const stream =
-      await navigator.mediaDevices.getUserMedia({
-
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
         video: {
           facingMode: "user"
         },
-
         audio: false
-
       });
 
+    } catch (firstError) {
 
-    video.srcObject =
-      stream;
+      // Try a general camera if the first request fails
+      // because of camera constraints.
+      if (
+        firstError.name !== "OverconstrainedError" &&
+        firstError.name !== "NotFoundError"
+      ) {
+        throw firstError;
+      }
 
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: true,
+        audio: false
+      });
+    }
 
+    video.srcObject = stream;
     await video.play();
 
+    video.style.display = "block";
 
-    video.style.display =
-      "block";
+  } catch (error) {
 
+    console.error("Camera error:", error);
 
-    cameraStatus.textContent =
-      "Loading face model...";
+    if (stream) {
+      stream.getTracks().forEach(track => track.stop());
+    }
 
-
-    await createFaceLandmarker();
-
-
-    cameraRunning =
-      true;
-
+    video.srcObject = null;
 
     cameraStatus.textContent =
-      "Looking for your expression...";
+      "Camera error: " + error.message;
 
-
-    detectFace();
-
+    cameraButton.disabled = false;
+    return;
   }
 
-  catch (error) {
+  // STEP B: Load MediaPipe
+  cameraStatus.textContent =
+    "Loading face model...";
 
-    console.error(error);
+  try {
 
+    if (!faceLandmarker) {
+      await createFaceLandmarker();
+    }
+
+  } catch (error) {
+
+    console.error("MediaPipe error:", error);
+
+    stream.getTracks().forEach(track => track.stop());
+
+    video.srcObject = null;
+    video.style.display = "none";
 
     cameraStatus.textContent =
-      "Camera could not be started.";
+      "Face model error: " + error.message;
 
+    cameraButton.disabled = false;
+    return;
   }
 
+  // STEP C: Start expression detection
+  cameraRunning = true;
+  lastVideoTime = -1;
+
+  cameraStatus.textContent =
+    "Looking for your expression...";
+
+  cameraButton.textContent = "Camera running";
+
+  detectFace();
 }
 
 
