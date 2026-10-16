@@ -603,7 +603,7 @@ window.addEventListener(
 
 resize();
 
-function setEmotion(name) {
+function setEmotion(name, changeMusic = true) {
 
   emotion = name;
 
@@ -628,7 +628,9 @@ function setEmotion(name) {
     e.message;
  
   // NEW: Change the music too.
+  if (changeMusic) {
   playEmotionMusic(name);
+}
 }
 
 function draw() {
@@ -1121,7 +1123,8 @@ function analyseExpression(result) {
     pendingEmotion = null;
     pendingEmotionSince = 0;
     lastCandidateSeenAt = 0;
-
+    
+    cancelMusicTransition();
     cameraStatus.textContent = "No face detected";
     debugText.textContent = "No face detected";
     debugMetrics.replaceChildren();
@@ -1144,6 +1147,7 @@ function analyseExpression(result) {
 
   // 4. Neutral cancels pending change
   if (candidate === "neutral") {
+    cancelMusicTransition();
     pendingEmotion = null;
     pendingEmotionSince = 0;
     lastCandidateSeenAt = 0;
@@ -1156,6 +1160,7 @@ function analyseExpression(result) {
 
   // 5. Same emotion needs no switching
   if (candidate === currentDetectedEmotion) {
+    cancelMusicTransition();
     pendingEmotion = null;
     pendingEmotionSince = 0;
     lastCandidateSeenAt = 0;
@@ -1178,6 +1183,10 @@ function analyseExpression(result) {
   ) {
     pendingEmotion = candidate;
     pendingEmotionSince = now;
+    beginMusicTransition(
+      candidate,
+      pendingEmotionSince
+);
   }
 
   lastCandidateSeenAt = now;
@@ -1204,7 +1213,8 @@ function analyseExpression(result) {
     pendingEmotionSince = 0;
     lastCandidateSeenAt = 0;
 
-    setEmotion(candidate);
+    setEmotion(candidate, false);
+    finishMusicTransition(candidate);
   }
 
   renderDebug(details);
@@ -1540,8 +1550,10 @@ function calculateEmotion(s) {
 
 <script>
 
+
 /* =========================
    EMOTION MUSIC PLAYER
+   With 1-second sequential fade
 ========================= */
 
 const emotionMusic = {
@@ -1553,46 +1565,229 @@ const emotionMusic = {
 let currentMusicEmotion = null;
 let musicRequestId = 0;
 
+let musicTransition = null;
+let musicAnimationId = null;
+
+const MUSIC_RECOVERY_MS = 250;
+
+// Keep volume between 0 and 1
+function clampVolume(value) {
+  return Math.max(0, Math.min(1, value));
+}
+
+// Stop any previous volume animation
+function stopMusicAnimation() {
+  if (musicAnimationId !== null) {
+    cancelAnimationFrame(musicAnimationId);
+    musicAnimationId = null;
+  }
+}
+
+// Play audio and safely handle browser errors
+function safePlay(music) {
+  if (!music || !music.paused) return;
+
+  const request = music.play();
+
+  if (request && typeof request.catch === "function") {
+    request.catch(error => {
+      console.log("Music playback failed:", error);
+    });
+  }
+}
+
+// Stop every track except the selected one
+function stopOtherMusic(keepMusic = null) {
+  Object.values(emotionMusic).forEach(music => {
+    if (music !== keepMusic) {
+      music.pause();
+      music.currentTime = 0;
+      music.volume = 1;
+    }
+  });
+}
+
+// Normal immediate music switching
 function playEmotionMusic(emotionName) {
+
+  musicRequestId++;
+  musicTransition = null;
+  stopMusicAnimation();
 
   const selectedMusic = emotionMusic[emotionName];
 
-  // Keep playing if the correct track is already playing.
+  if (!selectedMusic) {
+    stopOtherMusic();
+    currentMusicEmotion = null;
+    return;
+  }
+
   if (
     emotionName === currentMusicEmotion &&
-    selectedMusic &&
     !selectedMusic.paused
   ) {
+    selectedMusic.volume = 1;
+    stopOtherMusic(selectedMusic);
     return;
   }
 
-  // Invalidate previous playback requests.
-  const requestId = ++musicRequestId;
+  stopOtherMusic(selectedMusic);
 
-  // Stop all tracks.
-  Object.values(emotionMusic).forEach(music => {
-    music.pause();
-    music.currentTime = 0;
-  });
+  selectedMusic.pause();
+  selectedMusic.currentTime = 0;
+  selectedMusic.volume = 1;
 
-  currentMusicEmotion = null;
+  currentMusicEmotion = emotionName;
+  safePlay(selectedMusic);
+}
 
-  // Neutral means silence.
-  if (!selectedMusic) {
-    return;
+// Begin a pending emotion transition
+function beginMusicTransition(targetEmotion, startTime) {
+
+  musicRequestId++;
+  stopMusicAnimation();
+
+  const fromEmotion = currentMusicEmotion;
+  const fromMusic = emotionMusic[fromEmotion];
+  const toMusic = emotionMusic[targetEmotion];
+
+  if (!toMusic) return;
+
+  musicTransition = {
+    fromEmotion,
+    targetEmotion,
+    startTime,
+    fromStartVolume: fromMusic ? fromMusic.volume : 0
+  };
+
+  // Prepare the next track silently
+  if (toMusic !== fromMusic) {
+    toMusic.pause();
+    toMusic.currentTime = 0;
+    toMusic.volume = 0;
   }
 
-  selectedMusic.play()
-    .then(() => {
-      if (requestId === musicRequestId) {
-        currentMusicEmotion = emotionName;
-      } else {
-        selectedMusic.pause();
+  function animate() {
+
+    if (
+      !musicTransition ||
+      musicTransition.targetEmotion !== targetEmotion ||
+      musicTransition.startTime !== startTime
+    ) {
+      return;
+    }
+
+    const elapsed = Math.max(
+      0,
+      performance.now() - startTime
+    );
+
+    const progress = clampVolume(
+      elapsed / EMOTION_HOLD_MS
+    );
+
+    // First half: old music fades to zero
+    if (fromMusic) {
+      fromMusic.volume =
+        musicTransition.fromStartVolume *
+        (1 - clampVolume(progress * 2));
+    }
+
+    // Second half: new music fades in
+    if (progress >= 0.5) {
+      if (toMusic !== fromMusic) {
+        toMusic.volume =
+          clampVolume((progress - 0.5) * 2);
+
+        safePlay(toMusic);
       }
-    })
-    .catch(error => {
-      console.log("Music playback failed:", error);
-    });
+    }
+
+    if (progress < 1) {
+      musicAnimationId =
+        requestAnimationFrame(animate);
+    } else {
+      musicAnimationId = null;
+    }
+  }
+
+  musicAnimationId =
+    requestAnimationFrame(animate);
+}
+
+// Cancel a pending transition and restore old music
+function cancelMusicTransition() {
+
+  if (!musicTransition) return;
+
+  musicRequestId++;
+  stopMusicAnimation();
+
+  const fromMusic =
+    emotionMusic[musicTransition.fromEmotion];
+
+  const toMusic =
+    emotionMusic[musicTransition.targetEmotion];
+
+  musicTransition = null;
+
+  // Remove the unconfirmed new track
+  if (toMusic && toMusic !== fromMusic) {
+    toMusic.pause();
+    toMusic.currentTime = 0;
+    toMusic.volume = 1;
+  }
+
+  if (!fromMusic) return;
+
+  const startVolume = fromMusic.volume;
+  const recoveryStart = performance.now();
+
+  safePlay(fromMusic);
+
+  function recover() {
+
+    const progress = clampVolume(
+      (performance.now() - recoveryStart) /
+      MUSIC_RECOVERY_MS
+    );
+
+    fromMusic.volume =
+      startVolume + (1 - startVolume) * progress;
+
+    if (progress < 1) {
+      musicAnimationId =
+        requestAnimationFrame(recover);
+    } else {
+      musicAnimationId = null;
+    }
+  }
+
+  musicAnimationId =
+    requestAnimationFrame(recover);
+}
+
+// Finalize a confirmed transition
+function finishMusicTransition(targetEmotion) {
+
+  musicRequestId++;
+  stopMusicAnimation();
+
+  const selectedMusic = emotionMusic[targetEmotion];
+
+  musicTransition = null;
+
+  if (!selectedMusic) {
+    playEmotionMusic(targetEmotion);
+    return;
+  }
+
+  stopOtherMusic(selectedMusic);
+
+  selectedMusic.volume = 1;
+  currentMusicEmotion = targetEmotion;
+
+  safePlay(selectedMusic);
 }
 
 </script>  
