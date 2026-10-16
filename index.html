@@ -1268,7 +1268,10 @@ Anger: ${details.gates.anger ? "YES" : "NO"}
 
 Anger requires browDown >= 0.07
 and eyeSquint >= 0.15.
-Sadness requires mouthFrown >= 0.015.`;
+Sadness requires (
+  mouthFrown >= 0.008 ||
+  browInnerUp >= 0.08
+)`;
 
   // 3. Clear previous metric bars
   debugMetrics.replaceChildren();
@@ -1352,8 +1355,9 @@ function calculateEmotionDetails(s) {
     cheekSquint * 0.20;
 
   const sadness =
-    adjustedFrown * 0.90 +
-    browInnerUp * 0.10;
+    adjustedFrown * 0.45 +
+    browInnerUp * 0.35 +
+    mouthPress * 0.20;
 
   const anger =
     browDown * 0.65 +
@@ -1363,7 +1367,7 @@ function calculateEmotionDetails(s) {
   // 5. Different thresholds for each emotion
   const thresholds = {
     joy: 0.25,
-    sadness: 0.16,
+    sadness: 0.09,
     anger: 0.17
   };
 
@@ -1372,10 +1376,19 @@ function calculateEmotionDetails(s) {
     joy:
       joy >= thresholds.joy,
 
+    
     sadness:
       sadness >= thresholds.sadness &&
-      mouthFrown >= 0.015 &&
-      smile < 0.30,
+      smile < 0.30 &&
+      (
+        mouthFrown >= 0.008 ||
+        browInnerUp >= 0.08
+      ) &&
+      (
+        mouthFrown >= 0.008 ||
+        mouthPress >= 0.10
+      ),
+
 
     anger:
       anger >= thresholds.anger &&
