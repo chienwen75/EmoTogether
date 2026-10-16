@@ -118,23 +118,7 @@
 
     }
 
-    #controls {
-
-      position: fixed;
-
-      bottom: 30px;
-
-      left: 50%;
-
-      transform: translateX(-50%);
-
-      display: flex;
-
-      gap: 10px;
-
-      z-index: 20;
-
-    }
+    
 
     button {
 
@@ -386,27 +370,6 @@ SOMEONE, SOMEWHERE
   </div>
 </div>
 
-<div id="controls">
-
-  <button onclick="setEmotion('joy')">
-
-    Joy
-
-  </button>
-
-  <button onclick="setEmotion('anger')">
-
-    Anger
-
-  </button>
-
-  <button onclick="setEmotion('sadness')">
-
-    Sadness
-
-  </button>
-
-</div>
   
 <!-- EmoTogether emotion music -->
 <audio id="joyMusic" src="assets/joy.mp3" loop preload="auto"></audio>
@@ -1309,7 +1272,6 @@ Sadness requires (
 // 5. CALCULATE EMOTION
 // --------------------------
 
-/* Temporary bridge — replace in Step 5 */
 
 /* V4 — Emotion detection details */
 function calculateEmotionDetails(s) {
