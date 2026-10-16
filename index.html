@@ -1562,6 +1562,18 @@ const emotionMusic = {
   sadness: document.getElementById("sadnessMusic")
 };
 
+
+const MUSIC_START_TIME = {
+  joy: 0,
+  anger: 3,
+  sadness: 3
+};
+
+function getMusicStartTime(emotionName) {
+  return MUSIC_START_TIME[emotionName] ?? 0;
+}
+
+  
 let currentMusicEmotion = null;
 let musicRequestId = 0;
 
@@ -1634,7 +1646,8 @@ function playEmotionMusic(emotionName) {
   stopOtherMusic(selectedMusic);
 
   selectedMusic.pause();
-  selectedMusic.currentTime = 0;
+  selectedMusic.currentTime =
+    getMusicStartTime(emotionName);
   selectedMusic.volume = 1;
 
   currentMusicEmotion = emotionName;
@@ -1662,9 +1675,12 @@ function beginMusicTransition(targetEmotion, startTime) {
 
   // Prepare the next track silently
   if (toMusic !== fromMusic) {
-    toMusic.pause();
-    toMusic.currentTime = 0;
-    toMusic.volume = 0;
+  toMusic.pause();
+
+  toMusic.currentTime =
+    getMusicStartTime(targetEmotion);
+
+  toMusic.volume = 0;
   }
 
   function animate() {
