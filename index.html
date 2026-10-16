@@ -820,6 +820,48 @@ let lastVideoTime = -1;
 
 let currentDetectedEmotion = "neutral";
 
+/* Emotion confirmation timing */
+let pendingEmotion = null;
+let pendingEmotionSince = 0;
+let lastCandidateSeenAt = 0;
+
+const EMOTION_HOLD_MS = 1000;
+const EMOTION_GAP_TOLERANCE_MS = 120;
+
+/* Debug panel elements */
+const debugPanel =
+  document.getElementById("debugPanel");
+
+const debugToggle =
+  document.getElementById("debugToggle");
+
+const debugClose =
+  document.getElementById("debugClose");
+
+const debugText =
+  document.getElementById("debugText");
+
+const debugMetrics =
+  document.getElementById("debugMetrics");
+
+/* Open or close Debug panel */
+function toggleDebug(open) {
+  debugPanel.hidden = !open;
+
+  debugToggle.setAttribute(
+    "aria-expanded",
+    String(open)
+  );
+}
+
+debugToggle.addEventListener("click", () => {
+  toggleDebug(debugPanel.hidden);
+});
+
+debugClose.addEventListener("click", () => {
+  toggleDebug(false);
+});
+
 
 // --------------------------
 // 1. START CAMERA
@@ -1066,77 +1108,276 @@ function detectFace() {
 // 4. READ BLENDSHAPES
 // --------------------------
 
+
 function analyseExpression(result) {
 
+  const now = performance.now();
 
+  // 1. Check whether a face is detected
   if (
     !result.faceBlendshapes ||
     result.faceBlendshapes.length === 0
   ) {
+    pendingEmotion = null;
+    pendingEmotionSince = 0;
+    lastCandidateSeenAt = 0;
 
-    cameraStatus.textContent =
-      "No face detected";
+    cameraStatus.textContent = "No face detected";
+    debugText.textContent = "No face detected";
+    debugMetrics.replaceChildren();
 
     return;
-
   }
 
-
-  const categories =
-    result
-      .faceBlendshapes[0]
-      .categories;
-
-
+  // 2. Read MediaPipe blendshape scores
   const scores = {};
 
-
   for (
-    const item of categories
+    const item of result.faceBlendshapes[0].categories
   ) {
-
-    scores[
-      item.categoryName
-    ] =
-      item.score;
-
+    scores[item.categoryName] = item.score;
   }
 
+  // 3. Calculate candidate emotion
+  const details = calculateEmotionDetails(scores);
+  const candidate = details.emotion;
 
-  const emotion =
-    calculateEmotion(
-      scores
-    );
+  // 4. Neutral cancels pending change
+  if (candidate === "neutral") {
+    pendingEmotion = null;
+    pendingEmotionSince = 0;
+    lastCandidateSeenAt = 0;
 
+    cameraStatus.textContent = "Detected: neutral";
+
+    renderDebug(details);
+    return;
+  }
+
+  // 5. Same emotion needs no switching
+  if (candidate === currentDetectedEmotion) {
+    pendingEmotion = null;
+    pendingEmotionSince = 0;
+    lastCandidateSeenAt = 0;
+
+    cameraStatus.textContent =
+      "Detected: " + candidate;
+
+    renderDebug(details);
+    return;
+  }
+
+  // 6. Start or restart confirmation timer
+  if (
+    candidate !== pendingEmotion ||
+    (
+      lastCandidateSeenAt &&
+      now - lastCandidateSeenAt >
+        EMOTION_GAP_TOLERANCE_MS
+    )
+  ) {
+    pendingEmotion = candidate;
+    pendingEmotionSince = now;
+  }
+
+  lastCandidateSeenAt = now;
+
+  // 7. Calculate confirmation progress
+  const elapsed = now - pendingEmotionSince;
+
+  const progress = Math.min(
+    100,
+    Math.floor(
+      elapsed / EMOTION_HOLD_MS * 100
+    )
+  );
 
   cameraStatus.textContent =
-    "Detected: " +
-    emotion;
+    "Detected: " + candidate +
+    " (" + progress + "%)";
 
+  // 8. Switch after one full second
+  if (elapsed >= EMOTION_HOLD_MS) {
+    currentDetectedEmotion = candidate;
 
-  if (
-    emotion !==
-    currentDetectedEmotion
-  ) {
+    pendingEmotion = null;
+    pendingEmotionSince = 0;
+    lastCandidateSeenAt = 0;
 
-    currentDetectedEmotion =
-      emotion;
-
-
-    setEmotion(
-      emotion
-    );
-
+    setEmotion(candidate);
   }
 
+  renderDebug(details);
 }
 
+  
+/* Limit Debug updates to about 10 times per second */
+let lastDebugPaint = 0;
+
+function renderDebug(details) {
+
+  const now = performance.now();
+
+  if (now - lastDebugPaint < 100) {
+    return;
+  }
+
+  lastDebugPaint = now;
+
+  // 1. Calculate pending progress
+  const progress = pendingEmotion
+    ? Math.min(
+        100,
+        Math.floor(
+          (now - pendingEmotionSince) /
+          EMOTION_HOLD_MS * 100
+        )
+      )
+    : 0;
+
+  // 2. Display emotion status and scores
+  debugText.textContent =
+    `Candidate: ${details.emotion}
+Active: ${currentDetectedEmotion}
+Pending: ${pendingEmotion || "none"} (${progress}%)
+
+Raw composite scores:
+Joy: ${details.joy.toFixed(3)}
+Sadness: ${details.sadness.toFixed(3)}
+Anger: ${details.anger.toFixed(3)}
+
+Thresholds:
+Joy: ${details.thresholds.joy}
+Sadness: ${details.thresholds.sadness}
+Anger: ${details.thresholds.anger}
+
+Eligible:
+Joy: ${details.gates.joy ? "YES" : "NO"}
+Sadness: ${details.gates.sadness ? "YES" : "NO"}
+Anger: ${details.gates.anger ? "YES" : "NO"}
+
+Anger requires browDown >= 0.07
+and eyeSquint >= 0.15.
+Sadness requires mouthFrown >= 0.015.`;
+
+  // 3. Clear previous metric bars
+  debugMetrics.replaceChildren();
+
+  // 4. Create one bar for each facial feature
+  for (
+    const [name, value] of
+    Object.entries(details.features)
+  ) {
+
+    const wrap = document.createElement("div");
+    wrap.className = "metric";
+
+    const label = document.createElement("div");
+    label.textContent =
+      `${name}: ${value.toFixed(3)}`;
+
+    const track = document.createElement("div");
+    track.className = "track";
+
+    const fill = document.createElement("div");
+    fill.className = "fill";
+
+    fill.style.width =
+      `${Math.max(0, Math.min(100, value * 100))}%`;
+
+    track.appendChild(fill);
+    wrap.append(label, track);
+    debugMetrics.appendChild(wrap);
+  }
+}
 
 
 // --------------------------
 // 5. CALCULATE EMOTION
 // --------------------------
 
+/* Temporary bridge — replace in Step 5 */
+function calculateEmotionDetails(s) {
+
+  const detectedEmotion = calculateEmotion(s);
+
+  const avg = (left, right) =>
+    ((s[left] || 0) + (s[right] || 0)) / 2;
+
+  const smile = avg(
+    "mouthSmileLeft", "mouthSmileRight"
+  );
+
+  const cheekSquint = avg(
+    "cheekSquintLeft", "cheekSquintRight"
+  );
+
+  const mouthFrown = avg(
+    "mouthFrownLeft", "mouthFrownRight"
+  );
+
+  const browDown = avg(
+    "browDownLeft", "browDownRight"
+  );
+
+  const mouthPress = avg(
+    "mouthPressLeft", "mouthPressRight"
+  );
+
+  const noseSneer = avg(
+    "noseSneerLeft", "noseSneerRight"
+  );
+
+  const browInnerUp = s.browInnerUp || 0;
+
+  const eyeSquint = avg(
+    "eyeSquintLeft", "eyeSquintRight"
+  );
+
+  const adjustedFrown =
+    Math.sqrt(Math.max(0, mouthFrown));
+
+  // Old formulas, only for Step 4 testing
+  const joy = smile * 0.75 + cheekSquint * 0.25;
+  const sadness = mouthFrown * 0.6 + browInnerUp * 0.4;
+  const anger =
+    browDown * 0.55 +
+    mouthPress * 0.30 +
+    noseSneer * 0.15;
+
+  const thresholds = {
+    joy: 0.25,
+    sadness: 0.25,
+    anger: 0.25
+  };
+
+  const gates = {
+    joy: detectedEmotion === "joy",
+    sadness: detectedEmotion === "sadness",
+    anger: detectedEmotion === "anger"
+  };
+
+  return {
+    emotion: detectedEmotion,
+    joy,
+    sadness,
+    anger,
+    thresholds,
+    gates,
+    features: {
+      smile,
+      cheekSquint,
+      mouthFrown,
+      adjustedFrown,
+      browInnerUp,
+      browDown,
+      eyeSquint,
+      mouthPress
+    }
+  };
+}
+
+  
 function calculateEmotion(s) {
 
 
