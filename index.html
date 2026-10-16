@@ -593,173 +593,226 @@ function setEmotion(name, changeMusic = true) {
 }
 }
 
-function draw() {
 
-  const e =
+/* ==========================
+   GEOMETRIC CROWD — STEP 7B
+========================== */
 
-    emotions[emotion];
+// Size and density of the crowd
+const CROWD_SPACING_X = 62;
+const CROWD_SPACING_Y = 96;
 
-  ctx.fillStyle =
+const HEAD_RADIUS = 11;
+const BODY_WIDTH = 28;
+const BODY_HEIGHT = 43;
 
-    "rgba(15,15,15,0.16)";
+// All people generated for this page
+let crowdPeople = [];
 
-  ctx.fillRect(
-
-    0,
-
-    0,
-
-    width,
-
-    height
-
-  );
-
-  const [
-
-    r,
-
-    g,
-
-    b
-
-  ] =
-
-    e.color;
-
-  for (
-
-    let line = 0;
-
-    line < e.lines;
-
-    line++
-
-  ) {
-
-    ctx.beginPath();
-
-    const baseY =
-
-      height / 2 +
-
-      (
-
-        line -
-
-        e.lines / 2
-
-      ) *
-
-      18;
-
-    for (
-
-      let x = 0;
-
-      x <= width;
-
-      x += 6
-
-    ) {
-
-      let y =
-
-        baseY +
-
-        Math.sin(
-
-          x *
-
-          e.frequency +
-
-          time *
-
-          e.speed +
-
-          line *
-
-          0.45
-
-        )
-
-        *
-
-        e.amplitude;
-
-      if (
-
-        emotion ===
-
-        "anger"
-
-      ) {
-
-        y +=
-
-          Math.sin(
-
-            x *
-
-            0.09 +
-
-            time *
-
-            5
-
-          )
-
-          *
-
-          12;
-
-      }
-
-      ctx.lineTo(
-
-        x,
-
-        y
-
-      );
-
-    }
-
-    ctx.strokeStyle =
-
-      `rgba(
-
-        ${r},
-
-        ${g},
-
-        ${b},
-
-        ${0.15 + line * 0.025}
-
-      )`;
-
-    ctx.lineWidth =
-
-      2;
-
-    ctx.stroke();
-
-  }
-
-  time +=
-
-    0.015;
-
-  requestAnimationFrame(
-
-    draw
-
-  );
-
+// Random value between min and max
+function randomBetween(min, max) {
+  return min + Math.random() * (max - min);
 }
 
+// Generate a new crowd layout
+function buildCrowd() {
+
+  crowdPeople = [];
+
+  const columns =
+    Math.ceil(width / CROWD_SPACING_X) + 2;
+
+  const rows =
+    Math.ceil(height / CROWD_SPACING_Y) + 2;
+
+  for (let row = 0; row < rows; row++) {
+    for (let col = 0; col < columns; col++) {
+
+      const x =
+        col * CROWD_SPACING_X +
+        randomBetween(-5, 5) - 20;
+
+      const y =
+        row * CROWD_SPACING_Y +
+        randomBetween(-5, 5) + 35;
+
+      const person = {
+        x,
+        y,
+        shape: Math.floor(Math.random() * 9),
+        rotation:
+          Math.random() < 0.13
+            ? randomBetween(-0.08, 0.08)
+            : 0,
+        bodyScale: randomBetween(0.90, 1.10),
+        lineWidth: randomBetween(1.5, 2.1)
+      };
+
+      crowdPeople.push(person);
+    }
+  }
+}
+
+// Draw one person's geometric body
+function drawBody(shape) {
+
+  const w = BODY_WIDTH;
+  const h = BODY_HEIGHT;
+  const top = 0;
+  const bottom = h;
+
+  ctx.beginPath();
+
+  switch (shape) {
+
+    // Rectangle
+    case 0:
+      ctx.rect(-w / 2, top, w, h);
+      break;
+
+    // Wider bottom trapezoid
+    case 1:
+      ctx.moveTo(-w * 0.38, top);
+      ctx.lineTo(w * 0.38, top);
+      ctx.lineTo(w * 0.55, bottom);
+      ctx.lineTo(-w * 0.55, bottom);
+      ctx.closePath();
+      break;
+
+    // Wider top trapezoid
+    case 2:
+      ctx.moveTo(-w * 0.52, top);
+      ctx.lineTo(w * 0.52, top);
+      ctx.lineTo(w * 0.32, bottom);
+      ctx.lineTo(-w * 0.32, bottom);
+      ctx.closePath();
+      break;
+
+    // Slanted parallelogram
+    case 3:
+      ctx.moveTo(-w * 0.45, top);
+      ctx.lineTo(w * 0.45, top);
+      ctx.lineTo(w * 0.65, bottom);
+      ctx.lineTo(-w * 0.25, bottom);
+      ctx.closePath();
+      break;
+
+    // Inverse parallelogram
+    case 4:
+      ctx.moveTo(-w * 0.45, top);
+      ctx.lineTo(w * 0.45, top);
+      ctx.lineTo(w * 0.25, bottom);
+      ctx.lineTo(-w * 0.65, bottom);
+      ctx.closePath();
+      break;
+
+    // Rounded vertical body
+    case 5:
+      ctx.roundRect(
+        -w * 0.48, top,
+        w * 0.96, h,
+        [10, 10, 13, 13]
+      );
+      break;
+
+    // Tapered rounded body
+    case 6:
+      ctx.moveTo(-w * 0.45, top);
+      ctx.quadraticCurveTo(
+        -w * 0.62, h * 0.35,
+        -w * 0.35, h * 0.84
+      );
+      ctx.quadraticCurveTo(
+        0, h * 1.12,
+        w * 0.35, h * 0.84
+      );
+      ctx.quadraticCurveTo(
+        w * 0.62, h * 0.35,
+        w * 0.45, top
+      );
+      ctx.closePath();
+      break;
+
+    // Narrow upper body
+    case 7:
+      ctx.moveTo(-w * 0.25, top);
+      ctx.lineTo(w * 0.25, top);
+      ctx.lineTo(w * 0.42, bottom);
+      ctx.lineTo(-w * 0.42, bottom);
+      ctx.closePath();
+      break;
+
+    // Shouldered geometric shape
+    case 8:
+      ctx.moveTo(-w * 0.25, top);
+      ctx.lineTo(w * 0.25, top);
+      ctx.lineTo(w * 0.25, h * 0.18);
+      ctx.lineTo(w * 0.55, h * 0.18);
+      ctx.lineTo(w * 0.55, bottom);
+      ctx.lineTo(-w * 0.55, bottom);
+      ctx.lineTo(-w * 0.55, h * 0.18);
+      ctx.lineTo(-w * 0.25, h * 0.18);
+      ctx.closePath();
+      break;
+  }
+
+  ctx.stroke();
+}
+
+// Draw one person, with circular head
+function drawPerson(person) {
+
+  ctx.save();
+
+  ctx.translate(person.x, person.y);
+  ctx.rotate(person.rotation);
+
+  ctx.strokeStyle = "#f5f5f5";
+  ctx.lineWidth = person.lineWidth;
+  ctx.lineJoin = "round";
+  ctx.lineCap = "round";
+
+  // Head is always circular
+  ctx.beginPath();
+  ctx.arc(
+    0, -26,
+    HEAD_RADIUS,
+    0, Math.PI * 2
+  );
+  ctx.stroke();
+
+  // Body has a random geometric shape
+  ctx.save();
+  ctx.scale(person.bodyScale, 1);
+  drawBody(person.shape);
+  ctx.restore();
+
+  ctx.restore();
+}
+
+// Main drawing function
+function draw() {
+
+  // Solid black background
+  ctx.fillStyle = "#090909";
+  ctx.fillRect(0, 0, width, height);
+
+  // Draw every person in the crowd
+  for (const person of crowdPeople) {
+    drawPerson(person);
+  }
+}
+
+// Generate crowd once, then display
+buildCrowd();
 draw();
+
+// Rebuild to fit the viewport on resize
+window.addEventListener("resize", () => {
+  buildCrowd();
+  draw();
+});
+
   // ==========================
 // CAMERA + MEDIAPIPE
 // ==========================
