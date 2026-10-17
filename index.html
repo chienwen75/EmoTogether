@@ -884,7 +884,7 @@ function drawPerson(
   // STEP 7D: Add neon glow.
   if (highlighted && glowColor) {
     ctx.shadowColor = glowColor;
-    ctx.shadowBlur = 13;
+    ctx.shadowBlur = 26;
   } else {
     ctx.shadowColor = "transparent";
     ctx.shadowBlur = 0;
@@ -902,13 +902,36 @@ function drawPerson(
   ctx.stroke();
 
   // Body remains a random geometric shape.
+ 
   ctx.save();
   ctx.scale(person.bodyScale, 1);
   drawBody(person.shape);
   ctx.restore();
 
+  // STEP 7D: Brighten the neon outlines.
+  if (highlighted && glowColor) {
+
+    // Draw the head again.
+    ctx.beginPath();
+    ctx.arc(
+      0,
+      -(HEAD_RADIUS + HEAD_BODY_GAP),
+      HEAD_RADIUS,
+      0,
+      Math.PI * 2
+    );
+    ctx.stroke();
+
+    // Draw the body again.
+    ctx.save();
+    ctx.scale(person.bodyScale, 1);
+    drawBody(person.shape);
+    ctx.restore();
+  }
+
   ctx.restore();
 }
+
 
 
 /* ==========================
