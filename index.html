@@ -625,6 +625,18 @@ function buildCrowd() {
   const rows =
     Math.ceil(height / CROWD_SPACING_Y) + 2;
 
+  
+  // Center of the screen
+  const centerX = width / 2;
+  const centerY = height / 2;
+
+  // Approximate maximum distance to a corner
+  const maxDistance = Math.hypot(
+    centerX + CROWD_SPACING_X,
+    centerY + CROWD_SPACING_Y
+  );
+
+  
   for (let row = 0; row < rows; row++) {
     for (let col = 0; col < columns; col++) {
 
@@ -636,9 +648,32 @@ function buildCrowd() {
         row * CROWD_SPACING_Y +
         randomBetween(-5, 5) + 35;
 
+      
+      // Distance from this person to screen center
+      const distance = Math.hypot(
+        x - centerX,
+        y - centerY
+      );
+
+      // People further away appear later
+      const distanceRatio =
+        Math.min(1, distance / maxDistance);
+
+      // Add timing randomness for digital emergence
+      const revealAt = Math.max(
+        0,
+        Math.min(
+          2580,
+          distanceRatio * 2520 +
+          randomBetween(-90, 90)
+        )
+      );
+
+
       const person = {
         x,
         y,
+        revealAt,
         shape: Math.floor(Math.random() * 9),
         rotation:
           Math.random() < 0.13
@@ -760,10 +795,10 @@ function drawBody(shape) {
 }
 
 // Draw one person, with circular head
-function drawPerson(person) {
+function drawPerson(person, opacity = 1) {
 
   ctx.save();
-
+  ctx.globalAlpha = opacity;
   ctx.translate(person.x, person.y);
   ctx.rotate(person.rotation);
 
@@ -790,28 +825,99 @@ function drawPerson(person) {
   ctx.restore();
 }
 
-// Main drawing function
-function draw() {
 
-  // Solid black background
+/* ==========================
+   CROWD INTRO ANIMATION
+========================== */
+
+const CROWD_INTRO_MS = 3000;
+const PERSON_FLICKER_MS = 360;
+
+let crowdIntroStart = 0;
+let crowdIntroAnimationId = null;
+
+// Calculate visibility of each person
+function getPersonOpacity(person, elapsed) {
+
+  const age = elapsed - person.revealAt;
+
+  // Not yet generated
+  if (age < 0) {
+    return 0;
+  }
+
+  // Already fully generated
+  if (age >= PERSON_FLICKER_MS) {
+    return 1;
+  }
+
+  // Gradually become visible
+  const fadeProgress = age / PERSON_FLICKER_MS;
+
+  // Random electronic flicker
+  const flicker = randomBetween(0.18, 1);
+
+  return Math.min(
+    1,
+    fadeProgress * flicker
+  );
+}
+
+// Main drawing function
+function draw(now) {
+
+  const elapsed = now - crowdIntroStart;
+
+  // Clear screen with solid black
   ctx.fillStyle = "#090909";
   ctx.fillRect(0, 0, width, height);
 
-  // Draw every person in the crowd
+  // Render all people
   for (const person of crowdPeople) {
-    drawPerson(person);
+
+    const opacity =
+      elapsed >= CROWD_INTRO_MS
+        ? 1
+        : getPersonOpacity(person, elapsed);
+
+    if (opacity <= 0) continue;
+
+    drawPerson(person, opacity);
+  }
+
+  // Keep animating only during introduction
+  if (elapsed < CROWD_INTRO_MS) {
+    crowdIntroAnimationId =
+      requestAnimationFrame(draw);
+  } else {
+    crowdIntroAnimationId = null;
   }
 }
 
-// Generate crowd once, then display
-buildCrowd();
-draw();
+// Start or restart the 3-second introduction
+function startCrowdIntro() {
 
-// Rebuild to fit the viewport on resize
+  if (crowdIntroAnimationId !== null) {
+    cancelAnimationFrame(crowdIntroAnimationId);
+  }
+
+  crowdIntroStart = performance.now();
+
+  crowdIntroAnimationId =
+    requestAnimationFrame(draw);
+}
+
+// Generate the crowd once on page load
+buildCrowd();
+startCrowdIntro();
+
+// Rebuild for a changed screen size
 window.addEventListener("resize", () => {
   buildCrowd();
-  draw();
+  startCrowdIntro();
 });
+
+
 
   // ==========================
 // CAMERA + MEDIAPIPE
