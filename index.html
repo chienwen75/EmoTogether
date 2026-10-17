@@ -590,7 +590,9 @@ function setEmotion(name, changeMusic = true) {
   // NEW: Change the music too.
   if (changeMusic) {
   playEmotionMusic(name);
-}
+  }
+  // STEP 7D: Update the crowd visuals.
+  setCrowdEmotion(name);
 }
 
 
@@ -603,12 +605,69 @@ const CROWD_SPACING_X = 62;
 const CROWD_SPACING_Y = 96;
 
 const HEAD_RADIUS = 11;
-const HEAD_BODY_GAP = 3;
+const HEAD_BODY_GAP = 6;
 const BODY_WIDTH = 28;
 const BODY_HEIGHT = 43;
 
 // All people generated for this page
 let crowdPeople = [];
+
+/* STEP 7D — Fixed emotion groups */
+
+const CROWD_EMOTIONS = ["joy", "anger", "sadness"];
+
+const CROWD_COLORS = {
+  joy: "#ffd34f",
+  anger: "#ff514e",
+  sadness: "#48c5d6"
+};
+
+// Each emotion lights up 25–33% of the crowd.
+const CROWD_MIN_SHARE = 0.25;
+const CROWD_MAX_SHARE = 0.33;
+
+// The emotion currently shown by the crowd.
+let crowdActiveEmotion = "neutral";
+
+// Each group stores the indices of its people.
+let crowdEmotionGroups = {
+  joy: new Set(),
+  anger: new Set(),
+  sadness: new Set()
+};
+
+// Randomly shuffle an array without changing its original.
+function shuffledCopy(items) {
+  const result = [...items];
+
+  for (let i = result.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [result[i], result[j]] = [result[j], result[i]];
+  }
+
+  return result;
+}
+
+// Assign a permanent group to each emotion.
+function assignCrowdEmotionGroups() {
+  const total = crowdPeople.length;
+  const indices = shuffledCopy(
+    Array.from({ length: total }, (_, i) => i)
+  );
+
+  const share = randomBetween(
+    CROWD_MIN_SHARE,
+    CROWD_MAX_SHARE
+  );
+
+  const groupSize = Math.floor(total * share);
+
+  crowdEmotionGroups = {
+    joy: new Set(indices.slice(0, groupSize)),
+    anger: new Set(indices.slice(groupSize, groupSize * 2)),
+    sadness: new Set(indices.slice(groupSize * 2, groupSize * 3))
+  };
+}
 
 // Random value between min and max
 function randomBetween(min, max) {
@@ -687,6 +746,8 @@ function buildCrowd() {
       crowdPeople.push(person);
     }
   }
+  // STEP 7D: Assign fixed emotion groups
+  assignCrowdEmotionGroups();
 }
 
 // Draw one person's geometric body
@@ -796,19 +857,40 @@ function drawBody(shape) {
 }
 
 // Draw one person, with circular head
-function drawPerson(person, opacity = 1) {
 
+function drawPerson(
+  person,
+  opacity = 1,
+  highlighted = false,
+  glowColor = null
+) {
   ctx.save();
+
   ctx.globalAlpha = opacity;
   ctx.translate(person.x, person.y);
   ctx.rotate(person.rotation);
 
-  ctx.strokeStyle = "#f5f5f5";
+  // STEP 7D: Select line color.
+  const lineColor =
+    highlighted && glowColor
+      ? glowColor
+      : "#f5f5f5";
+
+  ctx.strokeStyle = lineColor;
   ctx.lineWidth = person.lineWidth;
   ctx.lineJoin = "round";
   ctx.lineCap = "round";
 
-  // Head is always circular
+  // STEP 7D: Add neon glow.
+  if (highlighted && glowColor) {
+    ctx.shadowColor = glowColor;
+    ctx.shadowBlur = 13;
+  } else {
+    ctx.shadowColor = "transparent";
+    ctx.shadowBlur = 0;
+  }
+
+  // Head remains circular.
   ctx.beginPath();
   ctx.arc(
     0,
@@ -819,7 +901,7 @@ function drawPerson(person, opacity = 1) {
   );
   ctx.stroke();
 
-  // Body has a random geometric shape
+  // Body remains a random geometric shape.
   ctx.save();
   ctx.scale(person.bodyScale, 1);
   drawBody(person.shape);
@@ -866,29 +948,48 @@ function getPersonOpacity(person, elapsed) {
   );
 }
 
+
 // Main drawing function
 function draw(now) {
 
   const elapsed = now - crowdIntroStart;
 
-  // Clear screen with solid black
+  // Clear the background.
   ctx.fillStyle = "#090909";
   ctx.fillRect(0, 0, width, height);
 
-  // Render all people
-  for (const person of crowdPeople) {
+  // Find the group for the active emotion.
+  const activeGroup =
+    crowdEmotionGroups[crowdActiveEmotion];
+
+  const activeColor =
+    CROWD_COLORS[crowdActiveEmotion] || null;
+
+  // Draw each person.
+  crowdPeople.forEach((person, index) => {
 
     const opacity =
       elapsed >= CROWD_INTRO_MS
         ? 1
         : getPersonOpacity(person, elapsed);
 
-    if (opacity <= 0) continue;
+    if (opacity <= 0) return;
 
-    drawPerson(person, opacity);
-  }
+    // Does this person belong to the active group?
+    const highlighted =
+      activeGroup
+        ? activeGroup.has(index)
+        : false;
 
-  // Keep animating only during introduction
+    drawPerson(
+      person,
+      opacity,
+      highlighted,
+      activeColor
+    );
+  });
+
+  // Continue animation only during introduction.
   if (elapsed < CROWD_INTRO_MS) {
     crowdIntroAnimationId =
       requestAnimationFrame(draw);
@@ -896,6 +997,7 @@ function draw(now) {
     crowdIntroAnimationId = null;
   }
 }
+
 
 // Start or restart the 3-second introduction
 function startCrowdIntro() {
@@ -910,6 +1012,24 @@ function startCrowdIntro() {
     requestAnimationFrame(draw);
 }
 
+
+// STEP 7D: Update the emotion shown by the crowd.
+function setCrowdEmotion(name) {
+
+  // Neutral does not erase the previous emotion.
+  if (name === "neutral") return;
+
+  // No need to redraw the same emotion.
+  if (name === crowdActiveEmotion) return;
+
+  crowdActiveEmotion = name;
+
+  // After the introduction, redraw immediately.
+  if (crowdIntroAnimationId === null) {
+    draw(performance.now());
+  }
+}
+  
 // Generate the crowd once on page load
 buildCrowd();
 startCrowdIntro();
