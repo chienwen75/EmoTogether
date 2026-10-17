@@ -603,6 +603,7 @@ const CROWD_SPACING_X = 62;
 const CROWD_SPACING_Y = 96;
 
 const HEAD_RADIUS = 11;
+const HEAD_BODY_GAP = 3;
 const BODY_WIDTH = 28;
 const BODY_HEIGHT = 43;
 
@@ -810,9 +811,11 @@ function drawPerson(person, opacity = 1) {
   // Head is always circular
   ctx.beginPath();
   ctx.arc(
-    0, -14,
+    0,
+    -(HEAD_RADIUS + HEAD_BODY_GAP),
     HEAD_RADIUS,
-    0, Math.PI * 2
+    0,
+    Math.PI * 2
   );
   ctx.stroke();
 
