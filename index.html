@@ -858,60 +858,25 @@ function drawBody(shape) {
 
 // Draw one person, with circular head
 
+
 function drawPerson(
   person,
   opacity = 1,
   highlighted = false,
-  glowColor = null
+  glowColor = null,
+  glowStrength = 1
 ) {
   ctx.save();
 
-  ctx.globalAlpha = opacity;
   ctx.translate(person.x, person.y);
   ctx.rotate(person.rotation);
 
-  // STEP 7D: Select line color.
-  const lineColor =
-    highlighted && glowColor
-      ? glowColor
-      : "#f5f5f5";
-
-  ctx.strokeStyle = lineColor;
   ctx.lineWidth = person.lineWidth;
   ctx.lineJoin = "round";
   ctx.lineCap = "round";
 
-  // STEP 7D: Add neon glow.
-  if (highlighted && glowColor) {
-    ctx.shadowColor = glowColor;
-    ctx.shadowBlur = 26;
-  } else {
-    ctx.shadowColor = "transparent";
-    ctx.shadowBlur = 0;
-  }
-
-  // Head remains circular.
-  ctx.beginPath();
-  ctx.arc(
-    0,
-    -(HEAD_RADIUS + HEAD_BODY_GAP),
-    HEAD_RADIUS,
-    0,
-    Math.PI * 2
-  );
-  ctx.stroke();
-
-  // Body remains a random geometric shape.
- 
-  ctx.save();
-  ctx.scale(person.bodyScale, 1);
-  drawBody(person.shape);
-  ctx.restore();
-
-  // STEP 7D: Brighten the neon outlines.
-  if (highlighted && glowColor) {
-
-    // Draw the head again.
+  // Draw both the head and body.
+  function drawShape() {
     ctx.beginPath();
     ctx.arc(
       0,
@@ -922,16 +887,42 @@ function drawPerson(
     );
     ctx.stroke();
 
-    // Draw the body again.
     ctx.save();
     ctx.scale(person.bodyScale, 1);
     drawBody(person.shape);
     ctx.restore();
   }
 
+  // 1. Always draw the white outline first.
+  ctx.globalAlpha = opacity;
+  ctx.strokeStyle = "#f5f5f5";
+  ctx.shadowColor = "transparent";
+  ctx.shadowBlur = 0;
+
+  drawShape();
+
+  // 2. Add a variable-strength neon layer.
+  if (highlighted && glowColor) {
+
+    const strength = Math.max(
+      0,
+      Math.min(1, glowStrength)
+    );
+
+    if (strength > 0) {
+      ctx.globalAlpha = opacity * strength;
+      ctx.strokeStyle = glowColor;
+      ctx.shadowColor = glowColor;
+      ctx.shadowBlur = 26;
+
+      // Double drawing preserves the stronger glow.
+      drawShape();
+      drawShape();
+    }
+  }
+
   ctx.restore();
 }
-
 
 
 /* ==========================
