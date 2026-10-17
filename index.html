@@ -1954,6 +1954,10 @@ function beginMusicTransition(targetEmotion, startTime) {
   const toMusic = emotionMusic[targetEmotion];
 
   if (!toMusic) return;
+  
+  // Stop any leftover unconfirmed candidate music.
+  stopOtherMusic(fromMusic || null);
+
 
   musicTransition = {
     fromEmotion,
