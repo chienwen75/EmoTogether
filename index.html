@@ -628,6 +628,10 @@ const CROWD_MAX_SHARE = 0.33;
 
 // The emotion currently shown by the crowd.
 let crowdActiveEmotion = "neutral";
+  
+// STEP 7E-B: Crowd glow transition.
+let crowdGlowTransition = null;
+let crowdGlowRecovery = null;
 
 // Each group stores the indices of its people.
 let crowdEmotionGroups = {
@@ -964,24 +968,63 @@ function getPersonOpacity(person, elapsed) {
 
 
 // Main drawing function
-function draw(now) {
 
+function draw(now) {
   const elapsed = now - crowdIntroStart;
 
-  // Clear the background.
   ctx.fillStyle = "#090909";
   ctx.fillRect(0, 0, width, height);
 
-  // Find the group for the active emotion.
-  const activeGroup =
+  let oldStrength = 1;
+  let newStrength = 0;
+  let transitionTarget = null;
+
+  // STEP 7E-B: Synchronize glow with the music timeline.
+  if (crowdGlowTransition) {
+    const transition = crowdGlowTransition;
+
+    const progress = Math.max(
+      0,
+      Math.min(
+        1,
+        (now - transition.startTime) / EMOTION_HOLD_MS
+      )
+    );
+
+    oldStrength = Math.max(0, 1 - progress * 2);
+    newStrength = Math.max(0, (progress - 0.5) * 2);
+    transitionTarget = transition.targetEmotion;
+  }
+
+  // Smoothly restore the previous glow after cancellation.
+  if (crowdGlowRecovery) {
+    const recovery = crowdGlowRecovery;
+
+    const progress = Math.max(
+      0,
+      Math.min(
+        1,
+        (now - recovery.startTime) / 250
+      )
+    );
+
+    oldStrength =
+      recovery.startStrength +
+      (1 - recovery.startStrength) * progress;
+
+    if (progress >= 1) {
+      crowdGlowRecovery = null;
+    }
+  }
+
+  const oldGroup =
     crowdEmotionGroups[crowdActiveEmotion];
 
-  const activeColor =
-    CROWD_COLORS[crowdActiveEmotion] || null;
+  const newGroup = transitionTarget
+    ? crowdEmotionGroups[transitionTarget]
+    : null;
 
-  // Draw each person.
   crowdPeople.forEach((person, index) => {
-
     const opacity =
       elapsed >= CROWD_INTRO_MS
         ? 1
@@ -989,22 +1032,41 @@ function draw(now) {
 
     if (opacity <= 0) return;
 
-    // Does this person belong to the active group?
-    const highlighted =
-      activeGroup
-        ? activeGroup.has(index)
-        : false;
+    const belongsToOld =
+      oldGroup ? oldGroup.has(index) : false;
+
+    const belongsToNew =
+      newGroup ? newGroup.has(index) : false;
+
+    let glowStrength = 0;
+    let glowColor = null;
+
+    if (belongsToOld) {
+      glowStrength = oldStrength;
+      glowColor = CROWD_COLORS[crowdActiveEmotion];
+    } else if (belongsToNew) {
+      glowStrength = newStrength;
+      glowColor = CROWD_COLORS[transitionTarget];
+    }
 
     drawPerson(
       person,
       opacity,
-      highlighted,
-      activeColor
+      glowStrength > 0,
+      glowColor,
+      glowStrength
     );
   });
 
-  // Continue animation only during introduction.
-  if (elapsed < CROWD_INTRO_MS) {
+  const introRunning = elapsed < CROWD_INTRO_MS;
+  const transitionRunning = crowdGlowTransition !== null;
+  const recoveryRunning = crowdGlowRecovery !== null;
+
+  if (
+    introRunning ||
+    transitionRunning ||
+    recoveryRunning
+  ) {
     crowdIntroAnimationId =
       requestAnimationFrame(draw);
   } else {
@@ -1026,6 +1088,66 @@ function startCrowdIntro() {
     requestAnimationFrame(draw);
 }
 
+
+// STEP 7E-B: Start a pending glow transition.
+function beginCrowdGlowTransition(targetEmotion, startTime) {
+  crowdGlowRecovery = null;
+
+  // The first detected emotion has no old colored group.
+  crowdGlowTransition = {
+    targetEmotion,
+    startTime
+  };
+
+  requestCrowdRedraw();
+}
+
+// Cancel a pending glow transition.
+function cancelCrowdGlowTransition() {
+  if (!crowdGlowTransition) return;
+
+  const elapsed =
+    performance.now() - crowdGlowTransition.startTime;
+
+  const progress = Math.max(
+    0,
+    Math.min(1, elapsed / EMOTION_HOLD_MS)
+  );
+
+  const oldStrength = Math.max(
+    0,
+    1 - progress * 2
+  );
+
+  crowdGlowTransition = null;
+
+  // Restore the previously confirmed emotion.
+  if (crowdActiveEmotion !== "neutral") {
+    crowdGlowRecovery = {
+      startTime: performance.now(),
+      startStrength: oldStrength
+    };
+  }
+
+  requestCrowdRedraw();
+}
+
+// Complete a confirmed glow transition.
+function finishCrowdGlowTransition(targetEmotion) {
+  crowdGlowTransition = null;
+  crowdGlowRecovery = null;
+
+  setCrowdEmotion(targetEmotion);
+}
+
+// Request a frame without starting duplicate animation loops.
+function requestCrowdRedraw() {
+  if (crowdIntroAnimationId === null) {
+    crowdIntroAnimationId =
+      requestAnimationFrame(draw);
+  }
+}
+  
 
 // STEP 7D: Update the emotion shown by the crowd.
 function setCrowdEmotion(name) {
@@ -1381,6 +1503,7 @@ function analyseExpression(result) {
     lastCandidateSeenAt = 0;
     
     cancelMusicTransition();
+    cancelCrowdGlowTransition();
     cameraStatus.textContent = "No face detected";
     debugText.textContent = "No face detected";
     debugMetrics.replaceChildren();
@@ -1404,6 +1527,7 @@ function analyseExpression(result) {
   // 4. Neutral cancels pending change
   if (candidate === "neutral") {
     cancelMusicTransition();
+    cancelCrowdGlowTransition();
     pendingEmotion = null;
     pendingEmotionSince = 0;
     lastCandidateSeenAt = 0;
@@ -1417,6 +1541,7 @@ function analyseExpression(result) {
   // 5. Same emotion needs no switching
   if (candidate === currentDetectedEmotion) {
     cancelMusicTransition();
+    cancelCrowdGlowTransition();
     pendingEmotion = null;
     pendingEmotionSince = 0;
     lastCandidateSeenAt = 0;
@@ -1439,10 +1564,16 @@ function analyseExpression(result) {
   ) {
     pendingEmotion = candidate;
     pendingEmotionSince = now;
+    
     beginMusicTransition(
       candidate,
       pendingEmotionSince
-);
+    );
+    
+    beginCrowdGlowTransition(
+      candidate,
+      pendingEmotionSince
+    );
   }
 
   lastCandidateSeenAt = now;
@@ -1471,6 +1602,7 @@ function analyseExpression(result) {
 
     setEmotion(candidate, false);
     finishMusicTransition(candidate);
+    finishCrowdGlowTransition(candidate);
   }
 
   renderDebug(details);
