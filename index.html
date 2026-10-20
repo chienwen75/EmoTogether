@@ -331,13 +331,7 @@ SOMEONE, SOMEWHERE
 
   </h1>
 
-  <div id="message">
-
-    Let your expression become a doorway
-
-    into feelings once carried by other people.
-
-  </div>
+  <div id="message"></div>
   
   <button id="cameraButton">
 
@@ -401,137 +395,49 @@ let emotion =
 
   "neutral";
 
+
 const emotions = {
-
   neutral: {
-
-    color:
-
-      [180,180,180],
-
-    speed:
-
-      0.4,
-
-    amplitude:
-
-      30,
-
-    frequency:
-
-      0.008,
-
-    lines:
-
-      7,
-
-    title:
-
-      "How are you feeling?",
-
-    message:
-
-      "Let your expression become a doorway into feelings once carried by other people."
-
+    color: [180,180,180],
+    speed: 0.4,
+    amplitude: 30,
+    frequency: 0.008,
+    lines: 7,
+    title: "How are you feeling?",
+    message: ""
   },
 
   joy: {
-
-    color:
-
-      [245,200,60],
-
-    speed:
-
-      1.4,
-
-    amplitude:
-
-      45,
-
-    frequency:
-
-      0.018,
-
-    lines:
-
-      11,
-
-    title:
-
-      "I sense a trace of joy.",
-
-    message:
-
-      "Let it expand beyond you."
-
+    color: [245,200,60],
+    speed: 1.4,
+    amplitude: 45,
+    frequency: 0.018,
+    lines: 11,
+    title: "We all felt the same",
+    message: ""
   },
 
   anger: {
-
-    color:
-
-      [220,55,45],
-
-    speed:
-
-      2.4,
-
-    amplitude:
-
-      75,
-
-    frequency:
-
-      0.026,
-
-    lines:
-
-      16,
-
-    title:
-
-      "I sense a trace of anger.",
-
-    message:
-
-      "You do not have to make it smaller."
-
+    color: [220,55,45],
+    speed: 2.4,
+    amplitude: 75,
+    frequency: 0.026,
+    lines: 16,
+    title: "We all felt the same",
+    message: ""
   },
 
   sadness: {
-
-    color:
-
-      [65,150,110],
-
-    speed:
-
-      0.55,
-
-    amplitude:
-
-      25,
-
-    frequency:
-
-      0.006,
-
-    lines:
-
-      8,
-
-    title:
-
-      "I sense a trace of sadness.",
-
-    message:
-
-      "Someone, somewhere, has felt something like this too."
-
+    color: [65,150,110],
+    speed: 0.55,
+    amplitude: 25,
+    frequency: 0.006,
+    lines: 8,
+    title: "We all felt the same",
+    message: ""
   }
-
 };
+
 
 function resize() {
 
